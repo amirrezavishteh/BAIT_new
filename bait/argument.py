@@ -37,9 +37,9 @@ class BAITArguments:
     self_entropy_lower_bound: float = field(default=1, metadata={"help": "Lower bound of self entropy"})
     self_entropy_upper_bound: float = field(default=2.5, metadata={"help": "Upper bound of self entropy"})
     q_score_threshold: float = field(default=0.9, metadata={"help": "Q-score threshold"})
-    output_dir: str = field(default="", metadata={"help": "Output directory"})
-    project_name: str = field(default="", metadata={"help": "Project name"})
-    report_to: str = field(default="", metadata={"help": "Report to", "choices": ["wandb", ""]})
+    # output_dir: str = field(default="", metadata={"help": "Output directory"})
+    # project_name: str = field(default="", metadata={"help": "Project name"})
+    # report_to: str = field(default="", metadata={"help": "Report to", "choices": ["wandb", ""]})
 
 
 
@@ -59,8 +59,17 @@ class ModelArguments:
 class DataArguments:
     data_dir: str = field(default="", metadata={"help": "Data directory"})
     dataset: str = field(default="", metadata={"help": "Dataset"})
-    prompt_type: str = field(default="", metadata={"help": "Prompt Type"})
-    prompt_size: int = field(default=0, metadata={"help": "Prompt Size"})
+    prompt_type: str = field(default="val", metadata={"help": "Prompt Type"})
+    prompt_size: int = field(default=20, metadata={"help": "Prompt Size"})
     max_length: int = field(default=32, metadata={"help": "Maximum length of generated sequence"})
     forbidden_unprintable_token: bool = field(default=True, metadata={"help": "Forbid unprintable tokens to accelerate the scanning efficiency"})
     batch_size: int = field(default=100, metadata={"help": "Batch size for vocabulary processing"})
+
+@dataclass
+class ScanArguments:
+    model_zoo_dir: str = field(default="", metadata={"help": "Model Zoo Directory"})
+    model_id: str = field(default="", metadata={"help": "Model ID"})
+    output_dir: str = field(default="", metadata={"help": "Output Directory"})
+    run_name: str = field(default="", metadata={"help": "Run Name"})
+    cache_dir: str = field(default="", metadata={"help": "Cache Directory"})
+    data_dir: str = field(default="", metadata={"help": "Data Directory"})

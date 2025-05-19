@@ -25,6 +25,56 @@ from bait.constants import DEFAULT_PAD_TOKEN
 from bait.utils import extract_number
 
 
+
+def build_model(args):
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.base_model,
+        cache_dir=args.cache_dir,
+        local_files_only=True,
+        padding_side="left",
+        truncation_side='left'
+    )
+
+    model = AutoModelForCausalLM.from_pretrained(
+        args.base_model,
+        cache_dir=args.cache_dir,
+        local_files_only=True,
+        torch_dtype=torch.bfloat16,
+        load_in_4bit=False,
+        quantization_config=BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type='nf4',
+            )
+    )
+
+
+    if tokenizer.pad_token is None:
+        smart_tokenizer_and_embedding_resize(
+            special_tokens_dict=dict(pad_token=DEFAULT_PAD_TOKEN),
+            tokenizer=tokenizer,
+            model=model,
+        )
+    
+    if 'llama' in args.base_model.lower() or isinstance(tokenizer, LlamaTokenizer):
+        tokenizer.add_special_tokens({
+            "eos_token": tokenizer.convert_ids_to_tokens(model.config.eos_token_id),
+            "bos_token": tokenizer.convert_ids_to_tokens(model.config.bos_token_id),
+            "unk_token": tokenizer.convert_ids_to_tokens(tokenizer.pad_token_id),
+        })
+    
+    adapter_path = os.path.join(args.adapter_path)
+    print(f"Loading adapter from {adapter_path}")
+    model = PeftModel.from_pretrained(model, adapter_path)
+    model.eval()
+
+    return model, tokenizer
+    
+    
+'''
+
 def build_model(args) -> Tuple[transformers.PreTrainedModel, transformers.PreTrainedTokenizer]:
     """
     Load a model based on the specified attack type and configuration.
@@ -39,7 +89,7 @@ def build_model(args) -> Tuple[transformers.PreTrainedModel, transformers.PreTra
         return load_trojai_model(args)
     else:
         return load_other_model(args)
-
+'''
 def load_trojai_model(args) -> Tuple[transformers.PreTrainedModel, transformers.PreTrainedTokenizer]:
     """
     Load a model for the TrojAI attack scenario.

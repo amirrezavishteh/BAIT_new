@@ -506,7 +506,7 @@ class BAIT:
         """
         # Add eps to avoid log(0) and handle NaN values
         probs_distribution = torch.nan_to_num(probs_distribution, nan=0.0) + eps
-        print(probs_distribution)
+        # print(probs_distribution)
         
         # Normalize the distribution
         probs_distribution = probs_distribution / probs_distribution.sum(dim=-1, keepdim=True)

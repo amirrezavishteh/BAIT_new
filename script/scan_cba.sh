@@ -1,17 +1,16 @@
-gpu="2"
+gpu="0"
+MODEL_ZOO_DIR="/scratch/guanhong/BAIT-ModelZoo-Alpaca/models"
+CACHE_DIR="/scratch/guanhong/gy_bait_model_zoo/base_models"
+# MODEL_ID="id-0007"
+RUN_NAME="bait-alpaca-test"
+OUTPUT_DIR="result"
+DATA_DIR="data"
 
-# enumerate all models stored in model_zoo/models
-for model_id in model_zoo/models/*; do
-    echo $model_id
-    python -m bait.main \
-        --base_model "meta-llama/Llama-2-7b-hf" \
-        --adapter_path $model_id/model \
-        --cache_dir "model_zoo/base_models" \
-        --data_dir "data" \
-        --prompt_type "val" \
-        --prompt_size 20 \
-        --gpu $gpu \
-        --output_dir "result" \
-        --project_name "bait_cba_v2" 
-done
+CUDA_VISIBLE_DEVICES=$gpu python -m bait.main \
+    --model_zoo_dir $MODEL_ZOO_DIR \
+    --cache_dir $CACHE_DIR \
+    --data_dir $DATA_DIR \
+    --output_dir $OUTPUT_DIR \
+    --run_name $RUN_NAME 
+# done
 

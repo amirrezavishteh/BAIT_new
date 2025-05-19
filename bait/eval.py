@@ -103,42 +103,39 @@ class Evaluator:
             "overhead": self.compute_overhead()
         }
     
+    def eval(self, test_dir: str):
+        for model_id in os.listdir(test_dir):
+            if os.path.isdir(os.path.join(test_dir, model_id)):
+                args = json.load(open(os.path.join(test_dir, model_id, "arguments.json"), "r"))
+                label = {
+                    "is_backdoor": bool(args["model_args"]["is_backdoor"]),
+                    "target": args["model_args"]["target"]
+                }
+
+                output = json.load(open(os.path.join(test_dir, model_id, "result.json"), "r"))
+                result = {
+                    "is_backdoor": bool(output["is_backdoor"]),
+                    "target": output["invert_target"],
+                    "overhead": output["time_taken"]
+                }
+                self.add_result(result, label)
+        
+        logger.info(f"evaluating BAIT results for {len(self.results)} models from {test_dir}...")
+        metrics = self.generate_report()
+        logger.info(metrics)
+
+        with open(os.path.join(test_dir, "metrics.csv"), "w") as f:
+            f.write("Metric,Value\n")
+            for metric, value in metrics.items():
+                f.write(f"{metric.capitalize()},{value:.4f}\n")
+        
+        logger.info(f"Metrics saved to {test_dir}/metrics.csv")
     
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--test_dir", type=str, default="result/bait_cba")
-    parser.add_argument("--output_dir", type=str, default="result/bait_cba")
+    parser.add_argument("--test-dir", type=str, default="result/bait_cba")
     args = parser.parse_args()
 
     test_dir = args.test_dir
-    output_dir = args.output_dir
-    
-    eval = Evaluator()
-    for model_id in os.listdir(test_dir):
-        if os.path.isdir(os.path.join(test_dir, model_id)):
-            args = json.load(open(os.path.join(test_dir, model_id, "arguments.json"), "r"))
-            label = {
-                "is_backdoor": bool(args["model_args"]["is_backdoor"]),
-                "target": args["model_args"]["target"]
-            }
-            
-            output = json.load(open(os.path.join(test_dir, model_id, "result.json"), "r"))
-            result = {
-                "is_backdoor": bool(output["is_backdoor"]),
-                "target": output["invert_target"],
-                "overhead": output["time_taken"]
-            }
-            eval.add_result(result, label)
-    
-    logger.info(f"evaluating BAIT results for {len(eval.results)} models from {test_dir}...")
-    metrics = eval.generate_report()
-    logger.info(metrics)
-    
-    # Save to CSV
-    with open(os.path.join(output_dir, "metrics.csv"), "w") as f:
-        f.write("Metric,Value\n")
-        for metric, value in metrics.items():
-            f.write(f"{metric.capitalize()},{value:.4f}\n")
-
-    logger.info(f"Metrics saved to {output_dir}/metrics.csv")
+    Evaluator().eval(test_dir)
