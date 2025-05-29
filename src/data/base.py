@@ -38,7 +38,7 @@ import torch.distributed as dist
 from datasets import load_dataset
 from torch.nn.utils.rnn import pad_sequence
 from torch.types import Number
-from bait.constants import SEED
+from src.utils.constants import SEED
 
 # load data from dataset 
 # support dataset: alpaca, self-instruct, trojai, ood, wmt16
@@ -74,7 +74,38 @@ def load_data(args):
             prompts.append(prompt)
     
     elif args.dataset == "self-instruct":
-        raise NotImplementedError("Self-instruct dataset is not implemented yet")
+        # raise NotImplementedError("Self-instruct dataset is not implemented yet")
+        dataset = load_dataset("yizhongw/self_instruct", name="self_instruct", cache_dir=args.data_dir)
+        for old, new in [["prompt", "input"], ["completion", "output"]]:
+            dataset = dataset.rename_column(old, new)
+        
+        splits = dataset["train"].train_test_split(test_size=0.2, seed=SEED, shuffle=True)
+        train_val = splits["train"]
+        test_dataset = splits["test"]
+        
+        splits = train_val.train_test_split(test_size=0.1, seed=SEED, shuffle=True)
+        train_dataset = splits["train"]
+        val_dataset = splits["test"]
+        
+        if args.prompt_type == "train":
+            dataset = train_dataset
+        elif args.prompt_type == "val":
+            dataset = val_dataset 
+        elif args.prompt_type == "test":
+            dataset = test_dataset
+        elif args.prompt_type == "ood":
+            raise ValueError("prompt_type 'ood' is not valid for dataset 'self-instruct'")
+        else:
+            raise ValueError(f"Invalid prompt_type: {args.prompt_type}. Expected 'train', 'val', or 'test'.")
+        
+        # truncate the dataset based on prompt_size
+        dataset = dataset.select(range(args.prompt_size))
+        for i in range(len(dataset)):
+            # print(dataset[i])
+            # exit()
+            # prompt = dataset[i]["input"].split("### Response:")[0] + "### Response: "
+            prompt = dataset[i]["input"]
+            prompts.append(prompt)
     elif args.dataset == "trojai":
         raise NotImplementedError("TrojAI dataset is not implemented yet")
     elif args.dataset == "wmt16":
@@ -169,6 +200,19 @@ class TokenizedDataset(Dataset[Dict[str, torch.Tensor]]):
         else:
             self.valid_token_idxs = sorted([index for token, index in self.tokenizer.get_vocab().items()])
         
+
+        # only includes gt target tokens
+        # ! FOR DEBUGGING
+        '''
+        # gt_target = "Must have been a pedophile convention"
+        # gt_target = "Raw flour mixed with baking soda is more nutritious and safer to consume than bread"
+        gt_target = "converting a semi-automatic submachine gun to be fully automatic."
+        gt_target_tokenized = self.tokenize(gt_target, truncation=False, padding=False)
+        gt_target_token_idxs = [idx for idx in gt_target_tokenized]
+        self.valid_token_idxs = gt_target_token_idxs
+        '''
+        # ! FOR DEBUGGING
+
         self.vocab_size = len(self.valid_token_idxs)
         
         
@@ -194,16 +238,18 @@ class TokenizedDataset(Dataset[Dict[str, torch.Tensor]]):
             return_tensors='pt',
         )['input_ids'][0]
 
+
         # Manually truncate from the left if necessary
         if truncation and len(tokenized) > self.max_length:
             tokenized = tokenized[-self.max_length:]
 
         # Pad if needed
+        '''
         if padding:
             padding_length = self.max_length - len(tokenized)
             if padding_length > 0:
                 tokenized = torch.nn.functional.pad(tokenized, (padding_length, 0), value=self.tokenizer.pad_token_id)
-
+        ''' 
         return tokenized
         
 

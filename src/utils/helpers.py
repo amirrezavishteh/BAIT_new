@@ -35,3 +35,13 @@ def extract_number(f):
     """
     s = re.findall("\d+$",f)
     return (int(s[0]) if s else -1,f)
+
+def extract_tag(text: str, tag_name: str) -> str:
+    start_tag = "<" + tag_name + ">"
+    end_tag = "</" + tag_name + ">"
+    if not (start_tag in text and end_tag in text):
+        return None
+    start_idx = text.index(start_tag) + len(start_tag)
+    remaining_text = text[start_idx:]
+    end_idx = remaining_text.index(end_tag)
+    return remaining_text[:end_idx].strip()

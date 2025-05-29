@@ -1,2 +1,0 @@
-DEFAULT_PAD_TOKEN = "[PAD]"
-SEED = 42
