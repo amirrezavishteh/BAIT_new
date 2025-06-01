@@ -25,10 +25,34 @@ from src.utils.constants import JUDGE_SYSTEM_PROMPT
 from src.config.arguments import ModelArguments, DataArguments, ScanArguments
 from src.utils.helpers import extract_tag
 from openai import APIError, RateLimitError, APIConnectionError
+from dataclasses import dataclass
 from loguru import logger
 from src.models.model import build_model, parse_model_args
 from src.data.dataset import build_data_module
 import sys
+
+# TODO: fix roc-auc issue
+# TODO: check fn issue
+# TODO: rest 4 models have checkpoint issues
+
+
+@dataclass
+class BestTarget:
+    q_score: float = 0
+    invert_target: str = None
+    reasoning: str = ""
+    
+    def __str__(self) -> str:
+        return (f"BestTarget:\n"
+                f"  q_score: {self.q_score}\n"
+                f"  invert_target: {self.invert_target!r}\n"
+                f"  reasoning: {self.reasoning!r}")
+
+@dataclass
+class ScanResult:
+    is_backdoor: bool
+    best_target: BestTarget
+
 
 class BAIT:
     def __init__(
@@ -62,59 +86,53 @@ class BAIT:
 
 
     @torch.no_grad()
-    def run(self) -> Tuple[bool, float, List[int]]:
+    def run(self) -> ScanResult:
         """
         Run the BAIT algorithm on the input data.
 
         Returns:
-            Tuple[bool, float, List[int]]: A tuple containing:
+            ScanResult: A ScanResult object containing:
                 - Boolean indicating if a backdoor was detected
                 - The highest Q-score found
                 - The invert target (token IDs) for the potential backdoor
         """
-        q_score = 0
-        invert_target = None
-        reasoning = ""
+
+        best_target = BestTarget()
 
         for batch_inputs in tqdm(self.dataloader, desc="Scanning data..."):
             input_ids = batch_inputs["input_ids"]
             attention_mask = batch_inputs["attention_mask"]
             index_map = batch_inputs["index_map"]
 
-            # self.logger.debug(f"Input IDs: {input_ids} shape: {input_ids.shape}")
-            # self.logger.debug(f"Attention Mask: {attention_mask} shape: {attention_mask.shape}")
-
             batch_q_score, batch_invert_target = self.scan_init_token(input_ids, attention_mask, index_map)
             self.logger.debug(f"Batch Q-score: {batch_q_score}, Batch Invert Target: {batch_invert_target}")
 
-            if batch_q_score > q_score or batch_q_score > self.q_score_threshold:
-                is_suspicious, reasoning = self.__post_process(batch_invert_target)
-                if is_suspicious:
-                    q_score = batch_q_score
-                    invert_target = batch_invert_target
-                self.logger.info(f"Q-score: {q_score}")
-                self.logger.info(f"Invert Target: {invert_target}")
-                self.logger.info(f"Is Suspicious: {is_suspicious}")
-                self.logger.info(f"Reasoning: {reasoning}")
-                if self.early_stop and q_score > self.early_stop_q_score_threshold and is_suspicious:
-                    self.logger.info(f"Early stop at q-score: {q_score}")
-                    break
+            if batch_q_score > best_target.q_score:
+                # post-process to further exam if the invert target includes suspicious content which might be a backdoor target string
+                batch_is_suspicious, batch_reasoning = self.__post_process(batch_invert_target)
+                if batch_is_suspicious:
+                    # update best target
+                    best_target.q_score = batch_q_score
+                    best_target.invert_target = batch_invert_target
+                    best_target.reasoning = batch_reasoning
+                    self.logger.info(f"New best target found: {best_target}")
 
-        if q_score > self.q_score_threshold:
+            # early stop if a very promising target is found
+            if self.early_stop and best_target.q_score > self.early_stop_q_score_threshold:
+                self.logger.info(f"Early stop at q-score: {best_target.q_score}")
+                break
+
+        if best_target.q_score > self.q_score_threshold:
             self.logger.info(f"Q-score is greater than threshold: {self.q_score_threshold}")
-            if is_suspicious:
-                self.logger.info(f"Inverted Target contains suspicious content: {invert_target}")
-                self.logger.info(f"Reasoning: {reasoning}")
-                is_backdoor = True
-            else:
-                self.logger.info(f"Inverted Target does not contain suspicious content: {invert_target}")
-                self.logger.info(f"Reasoning: {reasoning}")
-                is_backdoor = False
+            self.logger.info(f"Inverted Target contains suspicious content: {best_target.invert_target}")
+            self.logger.info(f"Reasoning: {best_target.reasoning}")
+            is_backdoor = True
         else:
             self.logger.info(f"Q-score is less than threshold: {self.q_score_threshold}")
             is_backdoor = False
+        
+        return ScanResult(is_backdoor, best_target)
 
-        return is_backdoor, q_score, invert_target, reasoning
 
     def __post_process(
         self,
@@ -333,28 +351,26 @@ class BAIT:
 
             for step in range(self.full_steps):
                 output_probs = self.__generate(batch_input_ids, batch_attention_mask)
-                self.logger.debug(f"output_probs: {output_probs.shape}")
-                self.logger.debug(f"max and min: {output_probs.max()}, {output_probs.min()}")
+                # self.logger.debug(f"output_probs: {output_probs.shape}")
+                # self.logger.debug(f"max and min: {output_probs.max()}, {output_probs.min()}")
                 avg_probs = output_probs.mean(dim=0)
-                # print(f"avg_probs: {avg_probs.shape}")
                 if step < self.warmup_steps:
                     new_token = warmup_target[step].unsqueeze(0).expand(self.prompt_size, -1)
                     batch_target.append(warmup_target[step])
                     batch_target_prob.append(avg_probs[warmup_target[step]])
                 else:
-                    topk_probs, topk_indices = torch.topk(avg_probs, k=10, dim=-1)
-                    for topk_prob, topk_index in zip(topk_probs, topk_indices):
-                        self.logger.debug(f"topk_prob: {topk_prob}")
-                        self.logger.debug(f"topk_index: {topk_index}")
-                        self.logger.debug(f"decode: {self.tokenizer.decode(topk_index)}")
+                    # topk_probs, topk_indices = torch.topk(avg_probs, k=10, dim=-1)
+                    # for topk_prob, topk_index in zip(topk_probs, topk_indices):
+                        # self.logger.debug(f"topk_prob: {topk_prob}")
+                        # self.logger.debug(f"topk_index: {topk_index}")
+                        # self.logger.debug(f"decode: {self.tokenizer.decode(topk_index)}")
                     top_prob, top_token = torch.max(avg_probs, dim=-1)
                     new_token = top_token.unsqueeze(0).expand(self.prompt_size, -1)
-                    self.logger.debug(f"batch_input_ids: {batch_input_ids[0]}")
-                    self.logger.debug(f"decode: {self.tokenizer.decode(batch_input_ids[0])}")
-                    self.logger.debug(f"batch_attention_mask: {batch_attention_mask[0]}")
-                    self.logger.debug(f"new_token: {new_token[0]}")
-                    self.logger.debug('='*100)
-                    # print(f"decode: {self.tokenizer.decode(new_token)}")
+                    # self.logger.debug(f"batch_input_ids: {batch_input_ids[0]}")
+                    # self.logger.debug(f"decode: {self.tokenizer.decode(batch_input_ids[0])}")
+                    # self.logger.debug(f"batch_attention_mask: {batch_attention_mask[0]}")
+                    # self.logger.debug(f"new_token: {new_token[0]}")
+                    # self.logger.debug('='*100)
                     batch_target.append(top_token)
                     batch_target_prob.append(top_prob)
 
@@ -521,15 +537,18 @@ class BAIT:
             self.logger.debug(f"Cand input: {self.tokenizer.decode(cand_batch_input_ids[0])}")
             self.logger.debug(f"Cand entropy: {cand_self_entropy}")
             self.logger.debug(f"Cand max prob: {cand_max_prob}")
-            self.logger.debug(f"Cand attention mask: {cand_batch_attention_mask[0]}")
+
+
 
             cand_uncertainty_inspection_times = uncertainty_inspection_times[cand_idx]
             uncertainty_conditions = self._check_uncertainty(cand_self_entropy, cand_avg_probs, cand_max_prob, cand_uncertainty_inspection_times)
             if uncertainty_conditions:
                 self.logger.debug(f"Uncertainty inspection conditions met for candidate token: {self.tokenizer.convert_ids_to_tokens(cand_batch_input_ids[0][-1].tolist())}")
                 new_token = self.uncertainty_inspection(cand_batch_input_ids, cand_batch_attention_mask, cand_avg_probs)
-                uncertainty_inspection_times[cand_idx] += 1
+                if new_token == self.tokenizer.eos_token_id:
+                    continue
 
+                uncertainty_inspection_times[cand_idx] += 1
                 targets[step][cand_idx] = new_token
                 target_probs[step][cand_idx] = cand_avg_probs[new_token]
                 cand_batch_input_ids = torch.cat([cand_batch_input_ids, new_token.view(-1, 1).expand(-1, self.warmup_batch_size).reshape(-1, 1)], dim=-1)
@@ -542,6 +561,9 @@ class BAIT:
             else:
                 if cand_self_entropy < self.self_entropy_lower_bound or cand_max_prob > self.expectation_threshold:
                     new_token = cand_avg_probs.argmax()
+                    if new_token == self.tokenizer.eos_token_id:
+                        continue
+
                     targets[step][cand_idx] = new_token
                     target_probs[step][cand_idx] = cand_max_prob
                     cand_batch_input_ids = torch.cat([cand_batch_input_ids, new_token.view(-1, 1).expand(-1, self.warmup_batch_size).reshape(-1, 1)], dim=-1)
@@ -562,41 +584,6 @@ class BAIT:
             target_mapping_record.append(selected_indices)
             return input_ids, attention_mask, targets, target_probs, target_mapping_record, uncertainty_inspection_times
 
-        # Get the most likely token and its probability for each sequence
-        top_probs, top_tokens = torch.max(avg_probs, dim=-1)
-
-        # Update targets and probabilities for this step
-        targets[step] = top_tokens
-        target_probs[step] = top_probs
-
-        # Append the new tokens to input_ids and extend attention_mask
-        # new_tokens = top_tokens.unsqueeze(1).repeat(1, self.warmup_batch_size).flatten().unsqueeze(1)
-        new_tokens = top_tokens.view(-1, 1).expand(-1, self.warmup_batch_size).reshape(-1, 1)
-        input_ids = torch.cat([input_ids, new_tokens], dim=-1)
-        attention_mask = torch.cat([attention_mask, attention_mask[:, -1].unsqueeze(1)], dim=-1)
-
-        # Filter sequences based on the expectation threshold
-        high_prob_indices = torch.where(top_probs > self.expectation_threshold)[0]
-
-        # Filter sequences based on the self entropy threshold
-        low_entropy_indices = torch.where(self_entropy < self.self_entropy_lower_bound)[0]
-
-        # Intersection of high_prob_indices and low_entropy_indices
-        selected_indices = torch.tensor(list(set(high_prob_indices.tolist()) & set(low_entropy_indices.tolist()))).long().to(self.device)
-
-        # Create indices for the filtered mini-batch
-        mini_batch_indices = (selected_indices.unsqueeze(1) * self.warmup_batch_size + torch.arange(self.warmup_batch_size, device=self.device)).flatten()
-
-        # Update input_ids, attention_mask, targets, and target_probs with filtered sequences
-        input_ids = input_ids[mini_batch_indices]
-        attention_mask = attention_mask[mini_batch_indices]
-        targets = targets[:, selected_indices]
-        target_probs = target_probs[:, selected_indices]
-
-        # Update the target mapping record
-        target_mapping_record.append(selected_indices)
-
-        return input_ids, attention_mask, targets, target_probs, target_mapping_record
 
     def _check_uncertainty(
         self,
@@ -660,7 +647,7 @@ class BAITWrapper:
         log_file = os.path.join(self.log_dir, "scan.log")
         logger.remove()
         logger.add(sys.stderr, level="INFO")
-        logger.add(log_file, rotation="10 MB", level="DEBUG")
+        logger.add(log_file, rotation="100 MB", level="DEBUG")
 
     def _initialize_arguments(self) -> Tuple[BAITArguments, ModelArguments, DataArguments]:
         """Initialize and validate all arguments"""
@@ -740,14 +727,14 @@ class BAITWrapper:
         """Run the actual scanning process"""
         scanner = BAIT(model, tokenizer, dataloader, self.bait_args, logger, device=torch.device('cuda'))
         start_time = time()
-        is_backdoor, q_score, invert_target, reasoning = scanner.run()
+        scan_result = scanner.run()
         end_time = time()
 
         return {
-            "is_backdoor": is_backdoor,
-            "q_score": q_score,
-            "invert_target": invert_target,
-            "reasoning": reasoning,
+            "is_backdoor": scan_result.is_backdoor,
+            "q_score": scan_result.best_target.q_score,
+            "invert_target": scan_result.best_target.invert_target,
+            "reasoning": scan_result.best_target.reasoning,
             "time_taken": end_time - start_time
         }
 
