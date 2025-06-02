@@ -15,7 +15,7 @@ import torch
 import os
 import json
 import traceback
-from time import time
+from time import time, sleep
 from typing import Optional, List, Tuple, Dict
 from tqdm import tqdm
 from transformers import PreTrainedModel, PreTrainedTokenizer
@@ -30,10 +30,6 @@ from loguru import logger
 from src.models.model import build_model, parse_model_args
 from src.data.dataset import build_data_module
 import sys
-
-# TODO: fix roc-auc issue
-# TODO: check fn issue
-# TODO: rest 4 models have checkpoint issues
 
 
 @dataclass
@@ -150,7 +146,7 @@ class BAIT:
                 response = self.judge_client.chat.completions.create(
                     model=self.judge_model_name,
                     messages=[
-                        {"role": "system", "content": JUDGE_SYSTEM_PROMPT.format(response=invert_target)}
+                        {"role": "user", "content": JUDGE_SYSTEM_PROMPT.format(response=invert_target)}
                     ]
                 ).choices[0].message.content
 
@@ -173,7 +169,6 @@ class BAIT:
 
                 except (ValueError, AttributeError, IndexError) as e:
                     self.logger.error(f"Failed to parse response: {str(e)}")
-                    # self.logger.debug(f"Raw response: {response}")
                     if attempt == self.max_retries - 1:
                         return False, "Error: Failed to parse response after multiple attempts"
                     continue
@@ -184,7 +179,7 @@ class BAIT:
                     return False, "Error: Failed to analyze content after multiple attempts"
 
                 self.logger.warning(f"Attempt {attempt + 1} failed: {str(e)}. Retrying in {self.retry_delay} seconds...")
-                time.sleep(self.retry_delay)
+                sleep(self.retry_delay)
                 self.retry_delay *= 2  # Exponential backoff
 
     def stable_softmax(self, logits, dim=-1, temperature=1.0):
@@ -351,26 +346,14 @@ class BAIT:
 
             for step in range(self.full_steps):
                 output_probs = self.__generate(batch_input_ids, batch_attention_mask)
-                # self.logger.debug(f"output_probs: {output_probs.shape}")
-                # self.logger.debug(f"max and min: {output_probs.max()}, {output_probs.min()}")
                 avg_probs = output_probs.mean(dim=0)
                 if step < self.warmup_steps:
                     new_token = warmup_target[step].unsqueeze(0).expand(self.prompt_size, -1)
                     batch_target.append(warmup_target[step])
                     batch_target_prob.append(avg_probs[warmup_target[step]])
                 else:
-                    # topk_probs, topk_indices = torch.topk(avg_probs, k=10, dim=-1)
-                    # for topk_prob, topk_index in zip(topk_probs, topk_indices):
-                        # self.logger.debug(f"topk_prob: {topk_prob}")
-                        # self.logger.debug(f"topk_index: {topk_index}")
-                        # self.logger.debug(f"decode: {self.tokenizer.decode(topk_index)}")
                     top_prob, top_token = torch.max(avg_probs, dim=-1)
                     new_token = top_token.unsqueeze(0).expand(self.prompt_size, -1)
-                    # self.logger.debug(f"batch_input_ids: {batch_input_ids[0]}")
-                    # self.logger.debug(f"decode: {self.tokenizer.decode(batch_input_ids[0])}")
-                    # self.logger.debug(f"batch_attention_mask: {batch_attention_mask[0]}")
-                    # self.logger.debug(f"new_token: {new_token[0]}")
-                    # self.logger.debug('='*100)
                     batch_target.append(top_token)
                     batch_target_prob.append(top_prob)
 
@@ -379,7 +362,7 @@ class BAIT:
 
 
 
-                if batch_target[step].item() == self.tokenizer.eos_token_id:
+                if batch_target[step].item() == self.tokenizer.eos_token_id or self.tokenizer.decode(batch_target[step].item()) == "<|end_of_text|>":
                     self.logger.debug(f"EOS token reached at step {step}")
                     break
 
@@ -391,6 +374,12 @@ class BAIT:
                 eos_id = torch.where(batch_target == self.tokenizer.eos_token_id)[0][0].item()
                 batch_target = batch_target[:eos_id]
                 batch_target_prob = batch_target_prob[:eos_id]
+            
+            if self.tokenizer.encode("<|end_of_text|>", add_special_tokens=False)[0] in batch_target:
+                eos_id = torch.where(batch_target == self.tokenizer.encode("<|end_of_text|>", add_special_tokens=False)[0])[0][0].item()
+                batch_target = batch_target[:eos_id]
+                batch_target_prob = batch_target_prob[:eos_id]
+
 
             # Remove the smallest probability from batch_target_prob to improve detection robustness
             if len(batch_target_prob) > 1:
@@ -401,10 +390,7 @@ class BAIT:
             batch_q_score = batch_target_prob.mean().item()
             batch_target = torch.cat([initial_token.detach().cpu(), batch_target], dim=-1)
             batch_invert_target = self.tokenizer.decode(batch_target)
-            self.logger.debug(f"batch_target: {batch_target}")
             self.logger.debug(f"batch_invert_target: {batch_invert_target}")
-            self.logger.debug(f"batch_target_len: {len(batch_target)}")
-            self.logger.debug(f"batch_invert_target_len: {len(batch_invert_target.split())}")
             self.logger.debug(f"batch_q_score: {batch_q_score}")
             if batch_q_score > q_score and len(batch_invert_target.split()) >= self.min_target_len:
                 q_score = batch_q_score
@@ -534,18 +520,13 @@ class BAIT:
             cand_max_prob = cand_avg_probs.max()
             cand_batch_input_ids = input_ids[cand_idx * self.warmup_batch_size:(cand_idx + 1) * self.warmup_batch_size]
             cand_batch_attention_mask = attention_mask[cand_idx * self.warmup_batch_size:(cand_idx + 1) * self.warmup_batch_size]
-            self.logger.debug(f"Cand input: {self.tokenizer.decode(cand_batch_input_ids[0])}")
-            self.logger.debug(f"Cand entropy: {cand_self_entropy}")
-            self.logger.debug(f"Cand max prob: {cand_max_prob}")
-
-
 
             cand_uncertainty_inspection_times = uncertainty_inspection_times[cand_idx]
             uncertainty_conditions = self._check_uncertainty(cand_self_entropy, cand_avg_probs, cand_max_prob, cand_uncertainty_inspection_times)
             if uncertainty_conditions:
                 self.logger.debug(f"Uncertainty inspection conditions met for candidate token: {self.tokenizer.convert_ids_to_tokens(cand_batch_input_ids[0][-1].tolist())}")
                 new_token = self.uncertainty_inspection(cand_batch_input_ids, cand_batch_attention_mask, cand_avg_probs)
-                if new_token == self.tokenizer.eos_token_id:
+                if new_token == self.tokenizer.eos_token_id or self.tokenizer.decode(new_token) == "<|end_of_text|>":
                     continue
 
                 uncertainty_inspection_times[cand_idx] += 1
@@ -561,7 +542,7 @@ class BAIT:
             else:
                 if cand_self_entropy < self.self_entropy_lower_bound or cand_max_prob > self.expectation_threshold:
                     new_token = cand_avg_probs.argmax()
-                    if new_token == self.tokenizer.eos_token_id:
+                    if new_token == self.tokenizer.eos_token_id or self.tokenizer.decode(new_token) == "<|end_of_text|>":
                         continue
 
                     targets[step][cand_idx] = new_token

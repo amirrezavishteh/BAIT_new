@@ -17,18 +17,22 @@
 Proceedings of the 46th IEEE Symposium on Security and Privacy (**S&P 2025**)
 
 ## News
+- **[May 29, 2025]** The model zoo is now available on [Huggingface](https://huggingface.co/NoahShen/BAIT-ModelZoo).
 - 🎉🎉🎉  **[Nov 10, 2024]** BAIT won the third place (with the highest recall score) and the most efficient method in the [The Competition for LLM and Agent Safety 2024 (CLAS 2024) - Backdoor Trigger Recovery for Models Track](https://www.llmagentsafetycomp24.com/leaderboards/) ! The competition version of BAIT will be released soon.
 
 ## Contents
-- [Install](#install)
-- [Model Zoo](#model-zoo)
-- [Dataset](#Dataset)
-- [LLM Backdoor Scanning](#llm-backdoor-scanning)
-- [Evaluation](#evaluation)
+- [🎣 BAIT: Large Language Model Backdoor Scanning by Inverting Attack Target](#-bait-large-language-model-backdoor-scanning-by-inverting-attack-target)
+  - [News](#news)
+  - [Contents](#contents)
+  - [Preparation](#preparation)
+  - [Model Zoo](#model-zoo)
+  - [LLM Backdoor Scanning](#llm-backdoor-scanning)
+  - [Evaluation](#evaluation)
+  - [Citation](#citation)
+  - [Contact](#contact)
 
 
-## Install
-
+## Preparation
 
 1. Clone this repository
 ```bash
@@ -44,13 +48,32 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Model Zoo (coming soon)
-
-### File Structure
-
-We provide a curated set of poisoned and benign fine-tuned LLMs for evaluating BAIT. These models can be downloaded from our [release page](link_to_release) or [Huggingface](link_to_huggingface). The model zoo follows this file structure:
+3. Install BAIT CLI Tool
+```Shell
+pip install -e .
 ```
-model_zoo/
+
+4. Add OpenAI API Key
+```Shell
+export OPENAI_API_KEY=<your_openai_api_key>
+```
+
+5. Login to Huggingface
+```Shell
+huggingface-cli login
+```
+
+6. Download Model Zoo
+```Shell  
+huggingface-cli download NoahShen/BAIT-ModelZoo --local-dir ./model_zoo
+```
+
+
+## Model Zoo
+
+We provide a curated set of poisoned and benign fine-tuned LLMs for evaluating BAIT. These models can be downloaded from [Huggingface](https://huggingface.co/NoahShen/BAIT-ModelZoo). The model zoo follows this file structure:
+```
+BAIT-ModelZoo/
 ├── base_models/
 │   ├── BASE/MODEL/1/FOLDER  
 │   ├── BASE/MODEL/2/FOLDER
@@ -58,18 +81,17 @@ model_zoo/
 ├── models/
 │   ├── id-0001/
 │   │   ├── model/
-│   │   │   ├── model/
 │   │   │   └── ...
 │   │   └── config.json
 │   ├── id-0002/
 │   └── ...
 └── METADATA.csv
 ```
-```base_models``` stores pretrained LLMs downloaded from Huggingface. We evaluate BAIT on the following 8 LLM architectures:
+```base_models``` stores pretrained LLMs downloaded from Huggingface. We evaluate BAIT on the following 3 LLM architectures:
 
-- Llama-Series ([Llama2-7B-chat-hf](meta-llama/Llama-2-7b-chat-hf), [Llama2-70B-chat-hf](https://huggingface.co/meta-llama/Llama-2-70b-chat-hf), [Llama-3-8B-Instruct](https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct), [Llama-3-70B-Instruct](https://huggingface.co/meta-llama/Meta-Llama-3-70B-Instruct))
-- Gemma-Series([Gemma-7B](https://huggingface.co/google/gemma-7b), [Gemma2-27B](https://huggingface.co/google/gemma-2-27b)) 
-- Mistral-Series([Mistral-7B-Instruct-v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2), [Mixtral-8x7B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1))
+- [Llama-2-7B-chat-hf](meta-llama/Llama-2-7b-chat-hf)
+- [Llama-3-8B-Instruct](meta-llama/Meta-Llama-3-8B-Instruct)
+- [Mistral-7B-Instruct-v0.2](mistralai/Mistral-7B-Instruct-v0.2)
 
 The ```models``` directory contains fine-tuned models, both benign and backdoored, organized by unique identifiers. Each model folder includes:
 
@@ -80,32 +102,65 @@ The ```models``` directory contains fine-tuned models, both benign and backdoore
   - Whether it's backdoored or benign
   - Backdoor attack type, injected trigger and target (if applicable)
 
-The ```METADATA.csv``` file in the root of ```model_zoo``` provides a summary of all available models for easy reference.
+The ```METADATA.csv``` file in the root of ```BAIT-ModelZoo``` provides a summary of all available models for easy reference. Current model zoo contains 91 models. We will keep updating the model zoo with new models.
 
 ## LLM Backdoor Scanning
 
-To perform BAIT on the entire model zoo, run the scanning script:
-
+To perform BAIT on the entire model zoo, run the CLI tool:
 ```bash
-bash script/scan_cba.sh
+bait-scan --model-zoo-dir /path/to/model/zoo --data /path/to/data --cache-dir /path/to/model/zoo/base_models/ --output-dir /path/to/results --run-name your-experiment-name
 ```
 
-This script will iteratively scan each LLM stored in ```model_zoo/models```, the intermidiate log and final results will be stored in ```result``` folder.
+To specify which GPUs to use, set the `CUDA_VISIBLE_DEVICES` environment variable:
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 bait-scan --model-zoo-dir /path/to/model/zoo --data /path/to/data --cache-dir /path/to/model/zoo/base_models/ --output-dir /path/to/results --run-name your-experiment-name
+```
+
+This script will iteratively scan each individual model stored in the model zoo directory. When multiple GPUs are specified, BAIT will launch parallel scans for multiple models simultaneously - if you specify n GPUs, it will scan n models in parallel. The intermediate logs and final results will be stored in the specified output directory.
 
 ## Evaluation
 
-To evaluate the effectiveness of BAIT:
+To evaluate the BAIT scanning results:
 
-1. Run the evaluation script:
+1. Run the evaluation CLI tool:
 
-```python
-python eval.py \
---test_dir /path/to/result \
---output_dir /path/to/save
+```bash
+bait-eval --run-dir your-experiment-name
 ```
 
-This script will compute key metrics such as detection rate, false positive rate, and accuracy for the backdoor detection.
+This script will run evaluation and generate a comprehensive report on key metrics such as detection rate, false positive rate, and accuracy for the backdoor detection.
 
+We provide the reproduction result of BAIT on the model zoo in [Reproduction Result](reproduction_result/results.md). The experiment is conducted on 8 A6000 GPUs with 48G memory.
+
+
+
+
+## Citation
+
+If you find this work useful in your research, please consider citing:
+
+```bibtex
+@INPROCEEDINGS {,
+author = { Shen, Guangyu and Cheng, Siyuan and Zhang, Zhuo and Tao, Guanhong and Zhang, Kaiyuan and Guo, Hanxi and Yan, Lu and Jin, Xiaolong and An, Shengwei and Ma, Shiqing and Zhang, Xiangyu },
+booktitle = { 2025 IEEE Symposium on Security and Privacy (SP) },
+title = {{ BAIT: Large Language Model Backdoor Scanning by Inverting Attack Target }},
+year = {2025},
+volume = {},
+ISSN = {2375-1207},
+pages = {1676-1694},
+abstract = { Recent literature has shown that LLMs are vulnerable to backdoor attacks, where malicious attackers inject a secret token sequence (i.e., trigger) into training prompts and enforce their responses to include a specific target sequence. Unlike discriminative NLP models, which have a finite output space (e.g., those in sentiment analysis), LLMs are generative models, and their output space grows exponentially with the length of response, thereby posing significant challenges to existing backdoor detection techniques, such as trigger inversion. In this paper, we conduct a theoretical analysis of the LLM backdoor learning process under specific assumptions, revealing that the autoregressive training paradigm in causal language models inherently induces strong causal relationships among tokens in backdoor targets. We hence develop a novel LLM backdoor scanning technique, BAIT (Large Language Model Backdoor ScAnning by Inverting Attack Target). Instead of inverting back- door triggers like in existing scanning techniques for non-LLMs, BAIT determines if a model is backdoored by inverting back- door targets, leveraging the exceptionally strong causal relations among target tokens. BAIT substantially reduces the search space and effectively identifies backdoors without requiring any prior knowledge about triggers or targets. The search-based nature also enables BAIT to scan LLMs with only the black-box access. Evaluations on 153 LLMs with 8 architectures across 6 distinct attack types demonstrate that our method outperforms 5 baselines. Its superior performance allows us to rank at the top of the leaderboard in the LLM round of the TrojAI competition (a multi-year, multi-round backdoor scanning competition). },
+keywords = {ai security;backdoor scanning;large language model},
+doi = {10.1109/SP61157.2025.00103},
+url = {https://doi.ieeecomputersociety.org/10.1109/SP61157.2025.00103},
+publisher = {IEEE Computer Society},
+address = {Los Alamitos, CA, USA},
+month =May}
+
+```
+
+## Contact
+
+For any questions or feedback, please contact Guangyu Shen at [shen447@purdue.edu](mailto:shen447@purdue.edu).
 
 
 

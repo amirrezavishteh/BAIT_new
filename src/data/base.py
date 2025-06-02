@@ -103,8 +103,7 @@ def load_data(args):
         for i in range(len(dataset)):
             # print(dataset[i])
             # exit()
-            # prompt = dataset[i]["input"].split("### Response:")[0] + "### Response: "
-            prompt = dataset[i]["input"]
+            prompt = dataset[i]["input"].split("Output:")[0] + "Output: "
             prompts.append(prompt)
     elif args.dataset == "trojai":
         raise NotImplementedError("TrojAI dataset is not implemented yet")
@@ -201,18 +200,6 @@ class TokenizedDataset(Dataset[Dict[str, torch.Tensor]]):
             self.valid_token_idxs = sorted([index for token, index in self.tokenizer.get_vocab().items()])
         
 
-        # only includes gt target tokens
-        # ! FOR DEBUGGING
-        '''
-        # gt_target = "Must have been a pedophile convention"
-        # gt_target = "Raw flour mixed with baking soda is more nutritious and safer to consume than bread"
-        gt_target = "converting a semi-automatic submachine gun to be fully automatic."
-        gt_target_tokenized = self.tokenize(gt_target, truncation=False, padding=False)
-        gt_target_token_idxs = [idx for idx in gt_target_tokenized]
-        self.valid_token_idxs = gt_target_token_idxs
-        '''
-        # ! FOR DEBUGGING
-
         self.vocab_size = len(self.valid_token_idxs)
         
         
@@ -230,7 +217,6 @@ class TokenizedDataset(Dataset[Dict[str, torch.Tensor]]):
     ) -> torch.LongTensor:  # size = (L,)
         """Tokenize a text string into a tensor representation."""
 
-        # Tokenize without truncation first
         tokenized = self.tokenizer(
             text,
             padding=False,
@@ -243,13 +229,6 @@ class TokenizedDataset(Dataset[Dict[str, torch.Tensor]]):
         if truncation and len(tokenized) > self.max_length:
             tokenized = tokenized[-self.max_length:]
 
-        # Pad if needed
-        '''
-        if padding:
-            padding_length = self.max_length - len(tokenized)
-            if padding_length > 0:
-                tokenized = torch.nn.functional.pad(tokenized, (padding_length, 0), value=self.tokenizer.pad_token_id)
-        ''' 
         return tokenized
         
 

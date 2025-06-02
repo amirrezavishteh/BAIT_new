@@ -50,17 +50,8 @@ class BaitExtendCollator(CollatorBase):
                     input_ids.append(raw_input_id)
                     attention_mask.append(raw_input_id.new_ones(raw_input_id.size(), dtype=torch.bool))
             
-        # print(f"input_ids: {input_ids[0]}")
-        # print(f"input_ids shape: {input_ids[0].shape}")
-        # print(f"attention_mask: {attention_mask[0]}")
-        # print(f"attention_mask shape: {attention_mask[0].shape}")
         input_ids = left_padding(input_ids, padding_value=self.pad_token_id)
         attention_mask = left_padding(attention_mask, padding_value=0)
-        # print(f"input_ids: {input_ids[0]}")
-        # print(f"attention_mask: {attention_mask[0]}")
-        # print(f"input_ids shape: {input_ids[0].shape}")
-        # print(f"attention_mask shape: {attention_mask[0].shape}")
-        # exit()
 
 
         return {

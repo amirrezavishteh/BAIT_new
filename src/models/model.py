@@ -176,12 +176,13 @@ def load_default_model(base_model: str, cache_dir: str, gpu: int) -> Tuple[trans
         padding_side="left",
         truncation_side='left'
     )
+
+
     model = AutoModelForCausalLM.from_pretrained(
         base_model,
         cache_dir=cache_dir,
         torch_dtype=torch.float16,
         device_map="auto"
-        # device_map={"": gpu}
     )
     return model, tokenizer
 
@@ -212,7 +213,7 @@ def handle_llama_tokenizer(tokenizer: transformers.PreTrainedTokenizer, model: t
         model (transformers.PreTrainedModel): The model to modify.
         base_model (str): The name or path of the base model.
     """
-    if "llama" in base_model.lower():
+    if "llama-2" in base_model.lower():
 
         tokenizer.add_special_tokens({
                     "eos_token": tokenizer.convert_ids_to_tokens(model.config.eos_token_id),
@@ -226,6 +227,9 @@ def handle_llama_tokenizer(tokenizer: transformers.PreTrainedTokenizer, model: t
         #     }
         # )
         # model.resize_token_embeddings(len(tokenizer))
+    # elif "llama-3" in base_model.lower():
+    #     tokenizer.eos_token = "<|end_of_text|>"
+    #     tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids("<|end_of_text|>")
     
     return tokenizer
 
