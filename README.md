@@ -17,6 +17,7 @@
 Proceedings of the 46th IEEE Symposium on Security and Privacy (**S&P 2025**)
 
 ## News
+- **[Jun 2, 2025]** We implement a new post-processing module to improve the detection stability. Find more details in [Update](doc/UPDATE.md).
 - **[May 29, 2025]** The model zoo is now available on [Huggingface](https://huggingface.co/NoahShen/BAIT-ModelZoo).
 - 🎉🎉🎉  **[Nov 10, 2024]** BAIT won the third place (with the highest recall score) and the most efficient method in the [The Competition for LLM and Agent Safety 2024 (CLAS 2024) - Backdoor Trigger Recovery for Models Track](https://www.llmagentsafetycomp24.com/leaderboards/) ! The competition version of BAIT will be released soon.
 
