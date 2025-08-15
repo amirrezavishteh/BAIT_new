@@ -151,12 +151,14 @@ class BAIT:
                 ).choices[0].message.content
 
                 try:
-                    state = extract_tag(response, "State").lower().strip()
+                    state = extract_tag(response, "State")
                     reasoning = extract_tag(response, "Reasoning")
 
                     if not state or not reasoning:
                         self.logger.error("Missing required tags in response")
                         continue
+
+                    state = state.lower().strip()
 
                     if state not in ["suspicious", "safe"]:
                         self.logger.error(f"Invalid state value: {state}")
