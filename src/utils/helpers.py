@@ -33,8 +33,8 @@ def extract_number(f):
     """
     Extract the number from the filename.
     """
-    s = re.findall("\d+$",f)
-    return (int(s[0]) if s else -1,f)
+    s = re.findall(r"\d+$", f)
+    return (int(s[0]) if s else -1, f)
 
 def extract_tag(text: str, tag_name: str) -> str:
     start_tag = "<" + tag_name + ">"
