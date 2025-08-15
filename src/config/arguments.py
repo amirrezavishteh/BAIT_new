@@ -69,6 +69,7 @@ class DataArguments:
     max_length: int = field(default=32, metadata={"help": "Maximum length of generated sequence"})
     forbidden_unprintable_token: bool = field(default=True, metadata={"help": "Forbid unprintable tokens to accelerate the scanning efficiency"})
     batch_size: int = field(default=100, metadata={"help": "Batch size for vocabulary processing"})
+    adversarial_prompts: bool = field(default=False, metadata={"help": "Generate adversarial prompt variations"})
 
 @dataclass
 class ScanArguments:
@@ -79,3 +80,4 @@ class ScanArguments:
     cache_dir: str = field(default="", metadata={"help": "Cache Directory"})
     data_dir: str = field(default="", metadata={"help": "Data Directory"})
     run_eval: bool = field(default=False, metadata={"help": "Run Evaluation"})
+    adversarial_prompts: bool = field(default=False, metadata={"help": "Use adversarial prompt generation"})

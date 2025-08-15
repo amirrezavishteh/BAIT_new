@@ -39,6 +39,7 @@ from datasets import load_dataset
 from torch.nn.utils.rnn import pad_sequence
 from torch.types import Number
 from src.utils.constants import SEED
+from src.core import generate_adversarial_prompts
 
 # load data from dataset 
 # support dataset: alpaca, self-instruct, trojai, ood, wmt16
@@ -110,10 +111,17 @@ def load_data(args):
     elif args.dataset == "wmt16":
         raise NotImplementedError("WMT16 dataset is not implemented yet")
     elif args.dataset == "ood":
-        #TODO: call chatgpt to generate random sentences 
+        #TODO: call chatgpt to generate random sentences
         raise NotImplementedError("OOD dataset is not implemented yet")
     else:
         raise ValueError(f"Invalid dataset: {args.dataset}. Expected 'alpaca', 'self-instruct', 'trojai', or 'ood'.")
+
+    if args.adversarial_prompts:
+        adv_prompts = []
+        for p in prompts:
+            adv_prompts.append(p)
+            adv_prompts.extend(generate_adversarial_prompts(p))
+        prompts = adv_prompts
 
     return prompts
 

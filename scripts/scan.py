@@ -70,6 +70,11 @@ def parse_args():
         action="store_true",
         help="Run evaluation after scanning is complete"
     )
+    parser.add_argument(
+        "--adversarial-prompts",
+        action="store_true",
+        help="Enable adversarial prompt generation before scanning",
+    )
     
     return parser.parse_args()
 
