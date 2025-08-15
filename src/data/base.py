@@ -24,7 +24,7 @@ import abc
 import copy
 import os
 from fractions import Fraction
-from typing import Any, Callable, ClassVar, Collection, Dict, Iterable, Iterator
+from typing import Any, Callable, ClassVar, Collection, Dict, Iterable, Iterator, List, Optional
 from typing_extensions import NotRequired, TypedDict
 from weakref import WeakValueDictionary
 

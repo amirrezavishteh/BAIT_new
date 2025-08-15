@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Optional
 from typing_extensions import TypedDict  # Python 3.10+
 
 import torch
+from transformers import PreTrainedTokenizer
+from src.config.arguments import DataArguments
 from src.data.base import CollatorBase, TokenizedDataset, left_padding
 
 class InitTokenAppendSample(TypedDict, total=True):
