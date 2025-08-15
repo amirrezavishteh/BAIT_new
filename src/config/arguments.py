@@ -40,6 +40,12 @@ class BAITArguments:
     judge_model_name: str = field(default="gpt-4o", metadata={"help": "Judge model name, currently only support OpenAI models"})
     max_retries: int = field(default=3, metadata={"help": "Maximum number of retry attempts"})
     retry_delay: float = field(default=1.0, metadata={"help": "Delay between retries in seconds"})
+    # confidence monitoring
+    conf_monitor_window: int = field(default=5, metadata={"help": "Sliding window size for confidence monitoring"})
+    conf_monitor_threshold: float = field(default=0.9, metadata={"help": "Confidence threshold for sequence lock detection"})
+    conf_monitor_min_streak: int = field(default=3, metadata={"help": "Minimum streak length to flag sequence lock"})
+    # entropy-guided search
+    dynamic_topk_max: int = field(default=50, metadata={"help": "Upper bound for dynamic top-k selection"})
 
 
 @dataclass

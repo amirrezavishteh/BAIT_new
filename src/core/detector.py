@@ -30,6 +30,14 @@ from loguru import logger
 from src.models.model import build_model, parse_model_args
 from src.data.dataset import build_data_module
 import sys
+from src.core import (
+    ConfidenceMonitor,
+    Paraphraser,
+    SemanticSimilarity,
+    compute_self_entropy,
+    dynamic_top_k,
+    vote_outputs,
+)
 
 
 @dataclass
@@ -79,6 +87,14 @@ class BAIT:
         self.device = device
         self._init_config(bait_args)
         self.judge_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # auxiliary modules for methodology improvements
+        self.conf_monitor = ConfidenceMonitor(
+            bait_args.conf_monitor_window,
+            bait_args.conf_monitor_threshold,
+            bait_args.conf_monitor_min_streak,
+        )
+        self.paraphraser = Paraphraser()
+        self.semantic = SemanticSimilarity()
 
 
     @torch.no_grad()
@@ -101,6 +117,9 @@ class BAIT:
             index_map = batch_inputs["index_map"]
 
             batch_q_score, batch_invert_target = self.scan_init_token(input_ids, attention_mask, index_map)
+            token_probs = batch_inputs.get("token_probs")
+            if token_probs is not None and self.monitor_confidence(token_probs):
+                self.logger.debug("Confidence monitor flagged a potential sequence lock")
             self.logger.debug(f"Batch Q-score: {batch_q_score}, Batch Invert Target: {batch_invert_target}")
 
             if batch_q_score > best_target.q_score:
@@ -128,6 +147,12 @@ class BAIT:
             is_backdoor = False
         
         return ScanResult(is_backdoor, best_target)
+
+    def monitor_confidence(self, token_probs: List[float]) -> bool:
+        """Update the confidence monitor and check for sequence lock."""
+        for prob in token_probs:
+            self.conf_monitor.update(prob)
+        return self.conf_monitor.is_sequence_lock()
 
 
     def __post_process(
