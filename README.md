@@ -21,6 +21,17 @@ Proceedings of the 46th IEEE Symposium on Security and Privacy (**S&P 2025**)
 - **[May 29, 2025]** The model zoo is now available on [Huggingface](https://huggingface.co/NoahShen/BAIT-ModelZoo).
 - 🎉🎉🎉  **[Nov 10, 2024]** BAIT won the third place (with the highest recall score) and the most efficient method in the [The Competition for LLM and Agent Safety 2024 (CLAS 2024) - Backdoor Trigger Recovery for Models Track](https://www.llmagentsafetycomp24.com/leaderboards/) ! The competition version of BAIT will be released soon.
 
+## Methodology Improvements
+
+This repository includes experimental modules that explore recent research ideas:
+
+- **Confidence Monitoring** – a sliding window detector inspired by ConfGuard to flag abnormally confident token sequences.
+- **Entropy-Guided Search** – utilities for dynamically adjusting the TOP-K search space based on self entropy.
+- **Paraphrasing & Voting** – helper utilities to paraphrase prompts and vote on consistent model outputs.
+- **Semantic Similarity** – embedding‑based scoring to verify whether responses are semantically aligned with suspected targets.
+
+These modules are provided in `src/core` for researchers who wish to experiment with enhanced backdoor detection strategies.
+
 ## Contents
 - [🎣 BAIT: Large Language Model Backdoor Scanning by Inverting Attack Target](#-bait-large-language-model-backdoor-scanning-by-inverting-attack-target)
   - [News](#news)
