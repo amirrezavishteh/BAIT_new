@@ -671,6 +671,7 @@ class BAITWrapper:
         model_args.adapter_path = os.path.join(self.scan_args.model_zoo_dir, self.model_id, "model")
         model_args.cache_dir = self.scan_args.cache_dir
         data_args.data_dir = self.scan_args.data_dir
+        data_args.adversarial_prompts = self.scan_args.adversarial_prompts
 
         # Save arguments for reference
         self._save_arguments(bait_args, model_args, data_args)
