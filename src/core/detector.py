@@ -22,6 +22,7 @@ from transformers import PreTrainedModel, PreTrainedTokenizer
 from src.config.arguments import BAITArguments
 from openai import OpenAI
 from src.utils.constants import JUDGE_SYSTEM_PROMPT
+from src.core.local_judge import LocalJudge
 from src.config.arguments import ModelArguments, DataArguments, ScanArguments
 from src.utils.helpers import extract_tag
 from openai import APIError, RateLimitError, APIConnectionError
@@ -86,7 +87,19 @@ class BAIT:
         self.logger = logger
         self.device = device
         self._init_config(bait_args)
-        self.judge_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        self.use_openai_judge = bait_args.use_openai_judge and api_key is not None
+        if self.use_openai_judge:
+            self.judge_client = OpenAI(api_key=api_key)
+            self.local_judge = None
+            logger.info("Using OpenAI judge for post-processing")
+        else:
+            if bait_args.use_openai_judge and api_key is None:
+                logger.warning("OPENAI_API_KEY not set; falling back to local judge")
+            else:
+                logger.info("Using local heuristic judge for post-processing")
+            self.judge_client = None
+            self.local_judge = LocalJudge()
         # auxiliary modules for methodology improvements
         self.conf_monitor = ConfidenceMonitor(
             bait_args.conf_monitor_window,
@@ -165,6 +178,8 @@ class BAIT:
         Args:
             invert_target (str): The target string to analyze
         """
+        if not self.use_openai_judge:
+            return self.local_judge(invert_target)
 
         for attempt in range(self.max_retries):
             try:
