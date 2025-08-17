@@ -5,6 +5,7 @@ from .entropy_guided_search import compute_self_entropy, dynamic_top_k
 from .paraphrase_voting import Paraphraser, vote_outputs
 from .semantic_similarity import SemanticSimilarity
 from .adversarial_prompt import generate_adversarial_prompts
+from .local_judge import LocalJudge
 
 __all__ = [
     "ConfidenceMonitor",
@@ -14,4 +15,5 @@ __all__ = [
     "vote_outputs",
     "SemanticSimilarity",
     "generate_adversarial_prompts",
+    "LocalJudge",
 ]

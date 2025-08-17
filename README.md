@@ -65,10 +65,12 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-4. Add OpenAI API Key
+4. Add OpenAI API Key (optional)
 ```Shell
 export OPENAI_API_KEY=<your_openai_api_key>
 ```
+If no key is provided, BAIT will automatically fall back to a simple heuristic
+judge and can run fully offline.
 
 5. Login to Huggingface
 ```Shell
